@@ -11,6 +11,7 @@ WAN_IF=$(ip -4 route show default | awk '{print $5; exit}')   # e.g. ens5
 iptables -P INPUT ACCEPT; iptables -P FORWARD ACCEPT; iptables -P OUTPUT ACCEPT
 iptables -F; iptables -X
 iptables -t nat -F
+iptables -t mangle -F
 
 iptables -N WG_PEERS   # per-peer FORWARD rules (VPN client -> GitLab)
 iptables -N WG_SSH     # per-peer INPUT rules (admin -> SSH on vpn-gw)
@@ -38,6 +39,11 @@ iptables -A FORWARD -i "$WAN_IF" -o "$WAN_IF" -s "$PRIVATE_CIDR" ! -d "$VPC_CIDR
 # VPN -> GitLab traffic is NOT NATed, so GitLab logs the real 10.99.0.x client address.
 iptables -t nat -A POSTROUTING -s "$PRIVATE_CIDR" ! -d "$VPC_CIDR" -o "$WAN_IF" -j MASQUERADE
 
+# ---- MSS clamp: TCP through the tunnel must fit the WireGuard MTU (1420). Without it, big packets
+# (SSH key exchange, TLS certificates) can be black-holed while small ones work: "web opens, ssh hangs".
+iptables -t mangle -A FORWARD -o "$WG_IF" -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+iptables -t mangle -A FORWARD -i "$WG_IF" -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+
 # ---- default deny --------------------------------------------------------------
 iptables -P INPUT DROP
 iptables -P FORWARD DROP
@@ -51,5 +57,7 @@ if [[ -f $PEERS_DB ]]; then
   done < "$PEERS_DB"
 fi
 
+# Flushing above removed fail2ban's chains; restart recreates them.
+systemctl try-restart fail2ban 2>/dev/null || true
 netfilter-persistent save >/dev/null
 echo "firewall applied (WAN interface: $WAN_IF)"
