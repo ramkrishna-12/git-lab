@@ -1,6 +1,5 @@
 # Private GitLab behind WireGuard (AWS, ap-south-1)
 
-> Status: code written for Parts 1-6, **not yet run end to end**. See "Known gaps" at the bottom. SECURITY.md (risk list + Part 4 answers) and RUNBOOK.md (handover) are in the repo root.
 
 ## Layout
 | Path | What |
