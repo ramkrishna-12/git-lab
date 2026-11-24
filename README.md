@@ -105,7 +105,7 @@ Open a second SSH session first. `sudo /tmp/lab/hardening/harden.sh gitlab` on g
 2. Why the application backup alone is not enough: `gitlab-backup` deliberately excludes `/etc/gitlab/gitlab-secrets.json` and `gitlab.rb`. The database holds CI/CD variables, 2FA secrets and runner tokens *encrypted* with keys that live only in `gitlab-secrets.json`. Restore the data without that file and every variable and 2FA enrolment is unreadable. The config also holds the TLS key and the settings the instance runs with.
 3. Restore test: set `create_restore_vm = true`, `terraform apply`; copy `backup/` to the new VM (`ssh -J ubuntu@10.99.0.1 ubuntu@10.20.2.11`), put the passphrase in `/root/.gitlab-backup-passphrase`, run `sudo ./restore.sh <bucket> <app-backup.tar> <config.enc>` then `sudo ./verify-restore.sh`. Reach the web UI with `ssh -L 8443:127.0.0.1:443 ubuntu@10.20.2.11` (via ProxyJump) if you want a screenshot. Afterwards set `create_restore_vm = false` and apply to destroy it.
 
-# Evidence checklist (you capture these)
+# Evidence checklist 
 | Evidence | How |
 |---|---|
 | Scan outside the VPN: nothing | `nmap -Pn -sS -p- <eip>` (all filtered); `nmap -Pn 10.20.2.10` from outside = no route/timeout |
@@ -117,9 +117,41 @@ Open a second SSH session first. `sudo /tmp/lab/hardening/harden.sh gitlab` on g
 | Revoked developer cannot connect | `sudo revoke-peer.sh dev2`, then `wg show` on dev2's laptop: no handshake |
 | Restored instance | `verify-restore.sh` output + UI screenshot |
 
-# Known gaps (be upfront about these in the review)
-- Nothing here has been executed yet; expect small fixes on first run. Terraform and shellcheck were not available when it was written, so only `bash -n` syntax checks were done.
-- `secret-scan` uses `zricethezav/gitleaks:latest`; pin a version tag before submitting.
-- `provision.sh` step "default branch protection defaults" and the temporary-token creation use GitLab internals/APIs that vary between versions; both have a documented manual fallback (Admin UI).
-- The runner shares a host with GitLab (risk #4). A separate runner VM is the fix.
-- No automatic reboot and no monitoring/alerting (optional bonuses not done). vpn-gw failure plan = rebuild from Terraform + restore `/etc/wireguard` (RUNBOOK section 3).
+# EVIDENCE
+ 
+Every screenshot below comes from my own self-hosted GitLab CE (`gitlab.company.internal`, `10.20.2.10`), reached only through the WireGuard VPN, on AWS ap-south-1. Secrets (tokens, passwords, private keys, recovery codes) are blurred or cropped.
+
+Images live in `evidence/`.
+
+- GitLab Runner Setup ![setup](<evidence/Screenshot 2026-11-24 005024.png>)
+
+- Resgister ![reg](<evidence/Screenshot 2026-11-24 011200.png>)
+![reg2](<evidence/Screenshot 2026-11-24 011341.png>)
+
+- Setup top-level group `company` with two subgroups, `team-web` and `team-mobile`
+
+![gropus](<evidence/Screenshot 2026-11-24 132839.png>)
+
+- Code base 
+
+![code](<evidence/Screenshot 2026-11-24 132832.png>)
+
+- Runner 
+
+![runner](<evidence/Screenshot 2026-11-24 011423.png>)
+
+- CI/CD 
+
+![yml file](<evidence/Screenshot 2026-11-24 133321.png>)
+
+- Pipeline In Progress
+
+
+![pipelines](<evidence/Screenshot 2026-11-24 131537.png>)
+
+- Branches 
+
+![branch](<evidence/Screenshot 2026-11-24 133949.png>)
+
+- Validate
+![validate](<evidence/Screenshot 2026-11-24 131548.png>)
